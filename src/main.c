@@ -53,7 +53,6 @@ static err_t tcp_server_close(void *arg) {
  */
 static err_t tcp_server_sent(void *arg, struct tcp_pcb *tpcb, u16_t len) {
   TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
-  printf("tcp_server_sent %u\n", len);
   state->sent_len += len;
 
   if (state->sent_len >= BUF_SIZE) {
@@ -150,10 +149,8 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
     return ERR_VAL;
   }
 
-  // this method is callback from lwIP, so cyw43_arch_lwip_begin is not required, however you
-  // can use this method to cause an assertion in debug mode, if this method is called when
-  // cyw43_arch_lwip_begin IS needed
   cyw43_arch_lwip_check();
+  
   if(p->tot_len > 0){
     printf("Data: %s", ((char*) p->payload));
     printf("tcp_server_recv %d/%d err %d\n", p->tot_len, state->recv_len, err);
@@ -191,7 +188,7 @@ static err_t tcp_server_poll(void *arg, struct tcp_pcb *tpcb) {
  */
 static void tcp_server_err(void *arg, err_t err) {
   if (err != ERR_ABRT) {
-    printf("tcp_client_err_fn %d\n", err);
+    printf("TCP Client ERROR %d\n", err);
   }
 }
 
@@ -227,51 +224,6 @@ static err_t tcp_server_accept(void *arg, struct tcp_pcb *client_pcb, err_t err)
   tcp_err(client_pcb, tcp_server_err);
 
   return tcp_server_send_data(arg, state->client_pcb, msg_welcome);
-}
-
-/**
- * Initialises the TCP server
- *
- * @param state	    the state struct
- */
-bool tcp_server_open(TCP_SERVER_T *state){
-  printf("Starting TCP server at %s:%u\n", ip4addr_ntoa(netif_ip4_addr(netif_list)), TCP_PORT);
-
-  // Creates s new TCP protocol control block but doesn't place it on any of the TCP PCB lists. The PCB is not put on any list until it is bound
-  struct tcp_pcb *pcb = tcp_new_ip_type(IPADDR_TYPE_ANY);
-  if(!pcb) {
-    printf("Failed to create PCB\n");
-    gpio_put(LED, 1);
-    return false;
-  }
-
-  // The current listening block and the parameter to pass to all callback functions
-  tcp_arg(state->server_pcb, state);
-
-  // Binds the connection to a local port number
-  err_t err = tcp_bind(pcb, NULL, TCP_PORT);
-  
-  if(err){
-    printf("Failed to bind to port\n");
-    gpio_put(LED, 1);
-    return false;
-  }
-
-  // Set the state to LISTEN. Returns a more memory efficient PCB
-  state->server_pcb = tcp_listen_with_backlog(pcb, 1);
-  if(!state->server_pcb){
-    printf("Failed to listen\n");
-    if(pcb){
-      tcp_close(pcb);
-    }
-    gpio_put(LED, 1);
-    return false;
-  }
-
-  // Specifies the function to be called whenever a listening connection has been connected to by a host
-  tcp_accept(state->server_pcb, tcp_server_accept);
-
-  return true;
 }
 
 /**
@@ -322,15 +274,8 @@ TCP_SERVER_T* init_server(){
   // Specifies the function to be called whenever a listening connection has been connected to by a host
   tcp_accept(state->server_pcb, tcp_server_accept);
 
-
-  // if(!tcp_server_open(state)){
-  //   gpio_put(LED, 1);
-  // }
-
   return state;
 }
-
-
 
 void listen(TCP_SERVER_T *state){
   printf("Listening for connections\n");
